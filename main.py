@@ -13,11 +13,11 @@ def fetch_content(url):
     content = ""
     main_content = soup.find("main")
     if main_content:
-        content = "\n".join([f"\t* **{tag.name}**\n\t{tag.get_text(strip=True)}" for tag in main_content.find_all()])
+        content = "\n".join([tag.get_text(strip=True) for tag in main_content.find_all()])
     else:
         body_content = soup.find("body")
         if body_content:
-            content = "\n".join([f"\t* **{tag.name}**\n\t{tag.get_text(strip=True)}" for tag in body_content.find_all()])
+            content = "\n".join([tag.get_text(strip=True) for tag in body_content.find_all()])
 
     return content
 
@@ -35,8 +35,8 @@ def main():
             try:
                 content = fetch_content(url)
                 if content:
-                    print(f"\n**URL:** {url}")
-                    print(f"**Content (markdown):**\n{markdown.markdown(content)}")
+
+                    print(markdown.markdown(content))
                 else:
                     print(f"No main or body element found in {url}")
             except Exception as e:
