@@ -1,30 +1,39 @@
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 from urllib.request import Request, urlopen
-def fetch_content(url):
 
+
+def parsePDF(conn):
+  pass
+
+def parseHTML(conn):
+  content = conn.read().decode("utf-8")
+  soup = BeautifulSoup(content, features="html.parser")
+  
+  html = ""
+  main_content = soup.find("main")
+  if main_content:
+      main_content_html=main_content.prettify()
+      html += main_content_html
+  else:
+      body_content = soup.find("body")
+      if body_content:
+          body_content_html=body_content.prettify()
+          html += body_content_html
+
+
+  content = markdownify(html)
+  return content
+
+def fetch_content(url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'}
     req = Request(url, headers=headers)
-    html = urlopen(req).read().decode("utf-8")
-
-    soup = BeautifulSoup(html, features="html.parser")
-
-    
-    html = ""
-    main_content = soup.find("main")
-    if main_content:
-        main_content_html=main_content.prettify()
-        html += main_content_html
+    conn = urlopen(req)
+    mimetype=conn.getheader('Content-Type')
+    if "application/pdf" in mimetype:
+      return parsePDF(conn)
     else:
-        body_content = soup.find("body")
-        if body_content:
-            body_content_html=body_content.prettify()
-            html += body_content_html
-    
-
-    content = markdownify(html)
-    
-    return content
+      return parseHTML(conn)    
 
 
 def main():
