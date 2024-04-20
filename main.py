@@ -1,10 +1,29 @@
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 from urllib.request import Request, urlopen
-
+import PyPDF2
 
 def parsePDF(conn):
-  pass
+  
+    try:
+        # Open the PDF file in read binary mode
+        with open(conn, 'rb') as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+
+            num_pages = len(pdf_reader.pages)
+
+            # Iterate through all pages and extract text
+            for page_num in range(num_pages):
+                page = pdf_reader.pages[page_num]
+                text = page.extract_text()
+
+                
+                print(text.strip())
+                return text.strip()
+
+    except FileNotFoundError:
+        print(f"Error: PDF file '{conn}' not found.")
+        return f"Error: PDF file '{conn}' not found."
 
 def parseHTML(conn):
   content = conn.read().decode("utf-8")
