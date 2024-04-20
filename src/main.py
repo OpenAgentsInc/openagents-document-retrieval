@@ -7,21 +7,27 @@ import PyPDF2
 import config as NodeConfig
 from events import retrieve as EventTemplate
 import json
+from io import BytesIO
+import hashlib
+import os
+
 def parsePDF(conn):
     # Open the PDF file in read binary mode
-    with open(conn, 'rb') as f:
-        pdf_reader = PyPDF2.PdfReader(f)
-        num_pages = len(pdf_reader.pages)
-        # Iterate through all pages and extract text
-        for page_num in range(num_pages):
-            page = pdf_reader.pages[page_num]
-            text = page.extract_text()
-            return text.strip()
+    f = BytesIO(conn.read())
+    pdf_reader = PyPDF2.PdfReader(f)
+    num_pages = len(pdf_reader.pages)
+    # Iterate through all pages and extract text
+    fullText = ""
+    for page_num in range(num_pages):
+        page = pdf_reader.pages[page_num]
+        text = page.extract_text()
+        fullText += text.strip()
+    return fullText
    
+
 def parseHTML(conn):
   content = conn.read().decode("utf-8")
-  soup = BeautifulSoup(content, features="html.parser")
-  
+  soup = BeautifulSoup(content, features="html.parser")  
   html = ""
   main_content = soup.find("main")
   if main_content:
@@ -32,10 +38,9 @@ def parseHTML(conn):
       if body_content:
           body_content_html=body_content.prettify()
           html += body_content_html
-
-
   content = markdownify(html)
   return content
+
 
 def fetch_content(url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'}
@@ -48,12 +53,23 @@ def fetch_content(url):
       return parseHTML(conn)    
 
 
- 
 class Runner (JobRunner):
     def __init__(self, filters, meta, template, sockets):
         super().__init__(filters, meta, template, sockets)
+        self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
+        os.makedirs(self.cachePath, exist_ok=True)
+
 
     def run(self,job):
+        outputFormat = job.outputFormat
+        cacheId = str(outputFormat)+"-"+"-".join([jin.data for jin in job.input])
+        cacheId = hashlib.sha256(cacheId.encode()).hexdigest()
+        cacheFile = os.path.join(self.cachePath,cacheId)
+        
+        if os.path.exists(cacheFile):
+            with open(cacheFile, 'r') as file:
+                return file.read()
+            
         outputContent = []
         for jin in job.input:
             try:
@@ -62,18 +78,19 @@ class Runner (JobRunner):
             except Exception as e:
                 print(e)
                 self.log("Error: Can't fetch "+jin.data+" "+str(e))
-        outputFormat = job.outputFormat
+        
         output = ""
         if outputFormat == "application/hyperblob":
             blobDisk = self.createStorage()
             for i in range(len(outputContent)):
                 blobDisk.writeUTF8(str(i)+".md",outputContent[i])
-            output = blobDisk.getURL()
+            output = blobDisk.getUrl()
             blobDisk.close()
         else:
             output = json.dumps(outputContent)
+        with open(cacheFile, 'w') as file:
+            file.write(output)
         return output
-
 
         
 node = OpenAgentsNode(NodeConfig.meta)
