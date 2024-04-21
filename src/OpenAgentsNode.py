@@ -5,7 +5,7 @@ import time
 import os
 import traceback
 import json
-
+import asyncio
 
 class BlobStorage:
     def __init__(self, id, url, node):
@@ -139,10 +139,16 @@ class JobRunner:
         self._disksByUrl = {}
         self._diskByName = {}
 
+    def canRun(self,job):
+        return True
+        
     def preRun(self):
         pass
 
-    def run(self, job):
+    async def loop(self):
+        pass
+
+    async def run(self, job):
         pass
 
 class OpenAgentsNode:
@@ -156,7 +162,7 @@ class OpenAgentsNode:
     poolAddress = None
     poolPort = None
     failedJobsTracker = []
-
+    isLooping = False
     def __init__(self, nameOrMeta=None, icon=None, description=None):
         name = ""
         if isinstance(nameOrMeta, str):
@@ -187,7 +193,7 @@ class OpenAgentsNode:
         return self.rpcClient
 
 
-    def reannounce(self):    
+    async def reannounce(self):    
         # Announce node
         time_ms=int(time.time()*1000)
         if time_ms >= self.nextNodeAnnounce:
@@ -220,7 +226,7 @@ class OpenAgentsNode:
                 runner._nextAnnouncementTimestamp = int(time.time()*1000) + 5000
 
 
-    def executePendingJob(self ):
+    async def executePendingJob(self ):
         client = self.getClient()
         for runner in self.runners:
             jobs=[]
@@ -242,16 +248,27 @@ class OpenAgentsNode:
                 t=time.time()   
                 try:
                     client = self.getClient() # Reconnect client for each job
+                    if not runner.canRun(job):
+                        continue
                     client.acceptJob(rpc_pb2.RpcAcceptJob(jobId=job.id))
                     wasAccepted = True
                     self.log("Job started on node "+self.nodeName, job.id)  
                     runner._setNode(self)
                     runner._setJob(job)
                     runner.preRun()
-                    output=runner.run(job)    
-                    runner.postRun()                            
-                    self.log("Job completed in "+str(time.time()-t)+" seconds on node "+self.nodeName, job.id)                
-                    client.completeJob(rpc_pb2.RpcJobOutput(jobId=job.id, output=output))
+                    async def task():
+                        try:
+                            output=await runner.run(job)    
+                            runner.postRun()                            
+                            self.log("Job completed in "+str(time.time()-t)+" seconds on node "+self.nodeName, job.id)                
+                            client.completeJob(rpc_pb2.RpcJobOutput(jobId=job.id, output=output))
+                        except Exception as e:
+                            self.failedJobsTracker.append([job.id, time.time()])
+                            self.log("Job failed in "+str(time.time()-t)+" seconds on node "+self.nodeName+" with error "+str(e), job.id)
+                            if wasAccepted:
+                                client.cancelJob(rpc_pb2.RpcCancelJob(jobId=job.id, reason=str(e)))
+                            traceback.print_exc()
+                    asyncio.create_task(task())
                 except Exception as e:
                     self.failedJobsTracker.append([job.id, time.time()])
                     self.log("Job failed in "+str(time.time()-t)+" seconds on node "+self.nodeName+" with error "+str(e), job.id)
@@ -264,17 +281,31 @@ class OpenAgentsNode:
         if jobId: 
             self.getClient().logForJob(rpc_pb2.RpcJobLog(jobId=jobId, log=message))
 
-    def run(self, poolAddress=None, poolPort=None):
+  
+    async def loop(self):
+        if not self.isLooping:
+            self.isLooping = True
+            promises = [runner.loop() for runner in self.runners]
+            await asyncio.gather(*promises)
+            self.isLooping = False
+        
+    def start(self, poolAddress=None, poolPort=None):
+        asyncio.run(self.run(poolAddress, poolPort))
+
+    async def run(self, poolAddress=None, poolPort=None):
         self.poolAddress = poolAddress or os.getenv('POOL_ADDRESS', "127.0.0.1")
         self.poolPort = poolPort or int(os.getenv('POOL_PORT', "5000"))
         while True:
             try:
-                self.reannounce()
-                self.executePendingJob()
-                time.sleep(10.0/1000.0)
+                asyncio.create_task(self.loop())
+                asyncio.create_task(self.reannounce())
+                asyncio.create_task(self.executePendingJob())
+                # time.sleep(10.0/1000.0)
+                await asyncio.sleep(10.0/1000.0)
             except Exception as e:
                 self.log("Error in main loop "+str(e))
                 traceback.print_exc()
-                time.sleep(5000.0/1000.0)
+                await asyncio.sleep(5)
+                # time.sleep(5)
             except KeyboardInterrupt:
                 break

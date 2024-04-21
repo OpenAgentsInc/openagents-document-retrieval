@@ -10,7 +10,8 @@ import json
 from io import BytesIO
 import hashlib
 import os
-
+import pickle
+import time
 def parsePDF(conn):
     # Open the PDF file in read binary mode
     f = BytesIO(conn.read())
@@ -59,16 +60,30 @@ class Runner (JobRunner):
         self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
         os.makedirs(self.cachePath, exist_ok=True)
 
+    def cacheSet(self, key, value, expiration=0):
+        with open(os.path.join(self.cachePath, key), 'wb') as file:
+            pickle.dump([value, expiration], file)
 
-    def run(self,job):
+    def cacheGet(self, key):
+        try:
+            p = os.path.join(self.cachePath, key)
+            if not os.path.exists(p):
+                return None
+            with open(p, 'rb') as file:
+                value, expiration = pickle.load(file)
+                if expiration == 0 or expiration > time.time():
+                    return value
+        except:
+            pass
+        return None
+
+
+    async def run(self,job):
         outputFormat = job.outputFormat
         cacheId = str(outputFormat)+"-"+"-".join([jin.data for jin in job.input])
         cacheId = hashlib.sha256(cacheId.encode()).hexdigest()
-        cacheFile = os.path.join(self.cachePath,cacheId)
         
-        if os.path.exists(cacheFile):
-            with open(cacheFile, 'r') as file:
-                return file.read()
+        output = self.cacheGet(cacheId)
             
         outputContent = []
         for jin in job.input:
@@ -88,11 +103,11 @@ class Runner (JobRunner):
             blobDisk.close()
         else:
             output = json.dumps(outputContent)
-        with open(cacheFile, 'w') as file:
-            file.write(output)
+       
+        self.cacheSet(cacheId, output)
         return output
 
         
 node = OpenAgentsNode(NodeConfig.meta)
 node.registerRunner(Runner(filters=EventTemplate.filters,sockets=EventTemplate.sockets,meta=EventTemplate.meta,template=EventTemplate.template))
-node.run()
+node.start()
