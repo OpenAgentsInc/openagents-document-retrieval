@@ -80,7 +80,7 @@ class Runner (JobRunner):
                 self.log("Error: Can't fetch "+jin.data+" "+str(e))
         
         output = ""
-        if outputFormat == "application/hyperblob":
+        if outputFormat == "application/hyperdrive+bundle":
             blobDisk = self.createStorage()
             for i in range(len(outputContent)):
                 blobDisk.writeUTF8(str(i)+".md",outputContent[i])
