@@ -6,6 +6,7 @@ import os
 import traceback
 import json
 import asyncio
+import pickle
 
 class BlobStorage:
     def __init__(self, id, url, node):
@@ -85,8 +86,41 @@ class JobRunner:
             self._sockets = sockets
 
 
+    def cacheSet(self, path, value, version=0, expireAt=0):
+        try:
+            dataBytes = pickle.dumps(value)
+            client = self._node.getClient()
+            CHUNK_SIZE = 1024
+            def write_data():
+                for j in range(0, len(dataBytes), CHUNK_SIZE):
+                    chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
+                    request = rpc_pb2.RpcCacheSetRequest(
+                        key=path, 
+                        data=chunk,
+                        expireAt=expireAt,
+                        version=version
+                    )
+                    yield request                              
+            res=client.cacheSet(write_data())
+            return res.success
+        except Exception as e:
+            print("Error setting cache "+str(e))
+            return False
         
 
+    def cacheGet(self, path, lastVersion = 0):
+        try:
+            client = self._node.getClient()
+            bytesOut = bytearray()
+            for chunk in client.cacheGet(rpc_pb2.RpcCacheGetRequest(key=path, lastVersion = lastVersion)):
+                if not chunk.exists:
+                    print("Cache miss")
+                    return None
+                bytesOut.extend(chunk.data)
+            return pickle.loads(bytesOut)
+        except Exception as e:
+            print("Error getting cache "+str(e))
+            return None
 
     def _setNode(self, node):
         self._node = node

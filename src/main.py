@@ -60,23 +60,6 @@ class Runner (JobRunner):
         self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
         os.makedirs(self.cachePath, exist_ok=True)
 
-    def cacheSet(self, key, value, expiration=0):
-        with open(os.path.join(self.cachePath, key), 'wb') as file:
-            pickle.dump([value, expiration], file)
-
-    def cacheGet(self, key):
-        try:
-            p = os.path.join(self.cachePath, key)
-            if not os.path.exists(p):
-                return None
-            with open(p, 'rb') as file:
-                value, expiration = pickle.load(file)
-                if expiration == 0 or expiration > time.time():
-                    return value
-        except:
-            pass
-        return None
-
 
     async def run(self,job):
         outputFormat = job.outputFormat
