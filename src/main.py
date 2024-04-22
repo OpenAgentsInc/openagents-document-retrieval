@@ -67,6 +67,9 @@ class Runner (JobRunner):
         cacheId = hashlib.sha256(cacheId.encode()).hexdigest()
         
         output = self.cacheGet(cacheId)
+        if output:
+            self.log("Cache hit")
+            return output
             
         outputContent = []
         for jin in job.input:
