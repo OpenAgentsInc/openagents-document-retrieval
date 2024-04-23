@@ -12,7 +12,7 @@ import hashlib
 import os
 import pickle
 import time
-def parsePDF(conn):
+async def parsePDF(conn):
     # Open the PDF file in read binary mode
     f = BytesIO(conn.read())
     pdf_reader = PyPDF2.PdfReader(f)
@@ -26,7 +26,7 @@ def parsePDF(conn):
     return fullText
    
 
-def parseHTML(conn):
+async def parseHTML(conn):
   content = conn.read().decode("utf-8")
   soup = BeautifulSoup(content, features="html.parser")  
   html = ""
@@ -43,15 +43,15 @@ def parseHTML(conn):
   return content
 
 
-def fetch_content(url):
+async def fetch_content(url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'}
     req = Request(url, headers=headers)
     conn = urlopen(req)
     mimetype=conn.getheader('Content-Type')
     if "application/pdf" in mimetype:
-      return parsePDF(conn)
+      return await parsePDF(conn)
     else:
-      return parseHTML(conn)    
+      return await parseHTML(conn)    
 
 
 class Runner (JobRunner):
@@ -66,7 +66,7 @@ class Runner (JobRunner):
         cacheId = str(outputFormat)+"-"+"-".join([jin.data for jin in job.input])
         cacheId = hashlib.sha256(cacheId.encode()).hexdigest()
         
-        output = self.cacheGet(cacheId)
+        output = await self.cacheGet(cacheId)
         if output:
             self.log("Cache hit")
             return output
@@ -74,7 +74,7 @@ class Runner (JobRunner):
         outputContent = []
         for jin in job.input:
             try:
-                content = fetch_content(jin.data)
+                content = await fetch_content(jin.data)
                 outputContent.append(content)
             except Exception as e:
                 print(e)
@@ -82,15 +82,15 @@ class Runner (JobRunner):
         
         output = ""
         if outputFormat == "application/hyperdrive+bundle":
-            blobDisk = self.createStorage()
+            blobDisk = await self.createStorage()
             for i in range(len(outputContent)):
-                blobDisk.writeUTF8(str(i)+".md",outputContent[i])
+                await blobDisk.writeUTF8(str(i)+".md",outputContent[i])
             output = blobDisk.getUrl()
-            blobDisk.close()
+            await blobDisk.close()
         else:
             output = json.dumps(outputContent)
        
-        self.cacheSet(cacheId, output)
+        await self.cacheSet(cacheId, output)
         return output
 
         
