@@ -3,4 +3,5 @@ beautifulsoup4
 PyPDF2
 grpcio==1.62.1
 protobuf==5.26.1
+lxml
 https://github.com/riccardobl/openagents-grpc-proto/releases/download/v0.7.4/openagents_grpc_proto-PYTHON.tar.gz
