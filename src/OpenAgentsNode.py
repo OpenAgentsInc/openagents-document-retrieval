@@ -240,6 +240,9 @@ class OpenAgentsNode:
             #self.getClient().logForJob(rpc_pb2.RpcJobLog(jobId=jobId, log=message))
             asyncio.create_task(self._log(message, jobId))
     
+    async def _acceptJob(self, jobId):
+        await self.getClient().acceptJob(rpc_pb2.RpcAcceptJob(jobId=jobId))
+
     async def executePendingJobForRunner(self , runner):
         if runner not in self.runners:
             del self.runnerTasks[runner]
@@ -255,22 +258,21 @@ class OpenAgentsNode:
                     filterByDescription = filter["filterByDescription"] if "filterByDescription" in filter else None,
                     filterById = filter["filterById"] if "filterById" in filter else None,
                     filterByKind  = filter["filterByKind"] if "filterByKind" in filter else None,
-                    wait=60000
+                    wait=60000,
+                    # exclude failed jobs
+                    excludeId = [x for x in self.failedJobsTracker if time.time()-x[1] < 60]
                 ))).jobs)    
             
-            self.failedJobsTracker = [x for x in self.failedJobsTracker if time.time()-x[1] < 60] # Remove older failed jobs  (gives a chance to retry)
-            for job in jobs:
-                if job.id in [x[0] for x in self.failedJobsTracker]:
-                    continue
+            for job in jobs:           
                 if len(jobs)>0 : self.log(str(len(jobs))+" pending jobs")
                 else : self.log("No pending jobs")
                 wasAccepted=False
                 t=time.time()   
                 try:
                     client = self.getClient() # Reconnect client for each job
-                    if not runner.canRun(job):
+                    if not await runner.canRun(job):
                         continue
-                    await client.acceptJob(rpc_pb2.RpcAcceptJob(jobId=job.id))
+                    asyncio.create_task(self._acceptJob(job.id))
                     wasAccepted = True
                     self.log("Job started on node "+self.nodeName, job.id)  
                     runner._setNode(self)
@@ -297,7 +299,7 @@ class OpenAgentsNode:
                     traceback.print_exc()
         except Exception as e:
             self.log("Error executing runner "+str(e), None)
-        await asyncio.sleep(5000.0/1000.0)
+            await asyncio.sleep(100.0/1000.0)
         self.runnerTasks[runner]=asyncio.create_task(self.executePendingJobForRunner(runner))
 
  
