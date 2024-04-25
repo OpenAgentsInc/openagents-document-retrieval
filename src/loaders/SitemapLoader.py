@@ -8,7 +8,7 @@ from loaders.Utils import Utils
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import traceback
-
+from dateutil import parser
 class SitemapLoader(HTMLLoader):
     runner = None
     def __init__(self,runner):
@@ -102,7 +102,10 @@ class SitemapLoader(HTMLLoader):
                 loc = loc.text if loc else None
                 if loc is None: continue
 
-                lastmod = datetime.datetime.strptime(lastmod.text , "%Y-%m-%dT%H:%M:%S%z") if lastmod else  datetime.datetime.now()
+
+                lastmod = parser.parse(lastmod.text) if lastmod else None
+
+                lastmod = lastmod if lastmod else  datetime.datetime.now()
                 changefreq = changefreq.text if changefreq else "unknown"
                 nextUrlUpdate = 0
                 if changefreq == "always":
