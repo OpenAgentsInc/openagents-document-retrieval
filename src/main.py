@@ -77,12 +77,12 @@ class Runner (JobRunner):
 
         ignoreCache = getParamValue("no-cache", "false") == "true"
         cacheDurationHint = int(getParamValue("cache-duration-hint", "0")) # in seconds
-        cacheExpirationHint = (time.time() + cacheDurationHint)*1000
+        cacheExpirationHint = (time.time() + cacheDurationHint)*1000 if cacheDurationHint > 0 else -1
 
         output = await self.cacheGet(cacheId) if not ignoreCache else None
         meta = await self.cacheGet(cacheId+".meta") if not ignoreCache else None
         try:
-            if output: # and meta and meta["nextUpdate"] > int(time.time()*1000):
+            if output and meta and (meta["nextUpdate"] > int(time.time()*1000) or meta["nextUpdate"] < 0):
                 print("Cache hit")
                 return output
         except Exception as e:
@@ -104,7 +104,7 @@ class Runner (JobRunner):
                 print(e)
                 self.log("Error: Can't fetch "+jin.data+" "+str(e))
         
-        if nextUpdate < cacheExpirationHint:
+        if nextUpdate < cacheExpirationHint or cacheExpirationHint < 0:
             nextUpdate = cacheExpirationHint
         
         outputContent = ["\n".join(outputContent)]
