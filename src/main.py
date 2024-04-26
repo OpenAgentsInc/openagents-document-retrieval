@@ -26,8 +26,9 @@ class Runner (JobRunner):
     def __init__(self, filters, meta, template, sockets):
         super().__init__(filters, meta, template, sockets)
         self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
+        maxWorkers = int(os.getenv('MAX_WORKERS', "32"))
         os.makedirs(self.cachePath, exist_ok=True)
-        self.executor = ThreadPoolExecutor(max_workers=32)
+        self.executor = ThreadPoolExecutor(max_workers=maxWorkers)
 
         # Register all loaders
         self.registerLoader(SitemapLoader(self))
@@ -39,20 +40,24 @@ class Runner (JobRunner):
 
 
     def _fetch_content(self, url):
-        output = None
-        nextUpdate = int(time.time()*1000 + 30*24*60*60*1000)
-        for loader in self.loaders:
-            print("Loader found",loader)
-            try:
-                output,nextT =  loader.load(url)
-                if not output:
+        try:
+            output = None
+            nextUpdate = int(time.time()*1000 + 30*24*60*60*1000)
+            for loader in self.loaders:
+                print("Loader found",loader)
+                try:
+                    output,nextT =  loader.load(url)
+                    if not output:
+                        continue
+                except Exception as e:
+                    print(e)
                     continue
-            except Exception as e:
-                print(e)
-                continue
-            if nextT < nextUpdate:  nextUpdate = nextT
-            break
-        return output,nextUpdate
+                if nextT < nextUpdate:  nextUpdate = nextT
+                break
+            return output,nextUpdate
+        except Exception as e:
+            print(e)
+            return ""
         
 
 

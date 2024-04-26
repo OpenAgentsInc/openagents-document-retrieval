@@ -9,10 +9,13 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 from dateutil import parser
+import os
 class SitemapLoader(HTMLLoader):
     runner = None
     def __init__(self,runner):
         self.runner = runner
+        self.maxWorkers = int(os.getenv('MAX_SIMULTANEOUS_REQUESTS', "4"))
+
         
     def findSitemapUrl(self,url):
         sitemap=""
@@ -167,7 +170,7 @@ class SitemapLoader(HTMLLoader):
         urls = self.deduplicateUrls(urls)
 
         contents = []
-        executor = ThreadPoolExecutor(max_workers=4)
+        executor = ThreadPoolExecutor(max_workers=self.maxWorkers)
 
         loadHtml=super().load
         for url in urls:
@@ -178,9 +181,7 @@ class SitemapLoader(HTMLLoader):
                     if not content:
                         print("Can't fetch",url["loc"],"wrong mime type")
                         return
-                    contents = loadHtml(url["loc"])[0]
-                    for i in range(len(contents)):
-                        contents[i]=contents[i]+"\n Source: "+url["loc"]+"\n\n"
+                    contents = loadHtml(url["loc"])[0]                    
                     out.extend(contents)
                 except Exception as e:
                     traceback.print_exc()                
