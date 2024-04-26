@@ -70,9 +70,17 @@ class Runner (JobRunner):
         outputFormat = job.outputFormat
         cacheId = str(outputFormat)+"-"+"-".join([jin.data for jin in job.input])
         cacheId = hashlib.sha256(cacheId.encode()).hexdigest()
-        
-        output = await self.cacheGet(cacheId)
-        meta = await self.cacheGet(cacheId+".meta")
+
+        def getParamValue(key,default=None):
+            param = [x for x in job.param if x.key == key]
+            return param[0].value[0] if len(param) > 0 else default
+
+        ignoreCache = getParamValue("no-cache", "false") == "true"
+        cacheDurationHint = int(getParamValue("cache-duration-hint", "0")) # in seconds
+        cacheExpirationHint = (time.time() + cacheDurationHint)*1000
+
+        output = await self.cacheGet(cacheId) if not ignoreCache else None
+        meta = await self.cacheGet(cacheId+".meta") if not ignoreCache else None
         try:
             if output: # and meta and meta["nextUpdate"] > int(time.time()*1000):
                 print("Cache hit")
@@ -95,6 +103,9 @@ class Runner (JobRunner):
             except Exception as e:
                 print(e)
                 self.log("Error: Can't fetch "+jin.data+" "+str(e))
+        
+        if nextUpdate < cacheExpirationHint:
+            nextUpdate = cacheExpirationHint
         
         outputContent = ["\n".join(outputContent)]
         output = ""
