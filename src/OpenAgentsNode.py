@@ -7,6 +7,51 @@ import traceback
 import json
 import asyncio
 import pickle
+import queue
+import concurrent
+
+class BlobWriter : 
+    def __init__(self,writeQueue,res ):
+        self.writeQueue = writeQueue
+        self.res = res
+
+    async def write(self, data):
+        self.writeQueue.put_nowait(data)
+
+    async def writeInt(self, data):
+        self.writeQueue.put_nowait(data.to_bytes(4, byteorder='big'))
+    
+    async def end(self):
+        self.writeQueue.put_nowait(None)
+        
+    async def close(self):
+        self.writeQueue.put_nowait(None)
+        res= await self.res
+        return res.success
+
+class BlobReader: 
+    def __init__(self, chunksQueue , req):
+        self.chunksQueue = chunksQueue
+        self.buffer = bytearray()
+        self.req = req
+
+
+    async def read(self, n = 1):
+        while len(self.buffer) < n:
+            v = await self.chunksQueue.get()
+            if v is None: break
+            self.buffer.extend(v)
+        result, self.buffer = self.buffer[:n], self.buffer[n:]
+        return result
+
+    async def readInt(self):
+        return int.from_bytes(await self.read(4), byteorder='big')
+ 
+        
+    async def close(self):
+        self.chunksQueue.task_done()
+        return await self.req
+
 
 class BlobStorage:
     def __init__(self, id, url, node):
@@ -27,7 +72,7 @@ class BlobStorage:
 
     async def writeBytes(self, path, dataBytes):
         client = self.node.getClient()
-        CHUNK_SIZE = 1024*1024*100
+        CHUNK_SIZE = 1024*1024*15
         def write_data():
             for j in range(0, len(dataBytes), CHUNK_SIZE):
                 chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
@@ -35,6 +80,39 @@ class BlobStorage:
                 yield request                              
         res=await client.diskWriteFile(write_data())
         return res.success
+
+
+    async def openWriteStream(self, path):
+        client = self.node.getClient()
+        writeQueue = asyncio.Queue()
+        CHUNK_SIZE = 1024*1024*15
+       
+      
+        async def write_data():
+            while True:
+                dataBytes = await writeQueue.get()
+                if dataBytes is None:  # End of stream
+                    break
+                for j in range(0, len(dataBytes), CHUNK_SIZE):
+                    chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
+                    request = rpc_pb2.RpcDiskWriteFileRequest(diskId=str(self.id), path=path, data=chunk)
+                    yield request
+                writeQueue.task_done()
+
+        res=client.diskWriteFile(write_data())
+
+        return BlobWriter(writeQueue, res)
+
+        
+    async def openReadStream(self, path):
+        client = self.node.getClient()
+        readQueue = asyncio.Queue()
+
+        async def read_data():
+            async for chunk in client.diskReadFile(rpc_pb2.RpcDiskReadFileRequest(diskId=self.id, path=path)):
+                readQueue.put_nowait(chunk.data)
+        r = asyncio.create_task(read_data())
+        return BlobReader(readQueue, r)
 
     async def readBytes(self, path):
         client = self.node.getClient()
@@ -69,6 +147,7 @@ class JobRunner:
     _meta = None
     _sockets = None
     _nextAnnouncementTimestamp = 0
+    cachePath = None
     def __init__(self, filters, meta, template, sockets):
         self._filters = filters
         
@@ -84,40 +163,64 @@ class JobRunner:
             self._sockets = json.dumps(sockets)
         else:
             self._sockets = sockets
+        
+        self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
+        if not os.path.exists(self.cachePath):
+            os.makedirs(self.cachePath)
 
 
-    async def cacheSet(self, path, value, version=0, expireAt=0):
+    async def cacheSet(self, path, value, version=0, expireAt=0, local=False):
         try:
             dataBytes = pickle.dumps(value)
-            client = self._node.getClient()
-            CHUNK_SIZE = 1024*1024*100
-            def write_data():
-                for j in range(0, len(dataBytes), CHUNK_SIZE):
-                    chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
-                    request = rpc_pb2.RpcCacheSetRequest(
-                        key=path, 
-                        data=chunk,
-                        expireAt=expireAt,
-                        version=version
-                    )
-                    yield request                              
-            res=await client.cacheSet(write_data())
-            return res.success
+            if local:
+                fullPath = os.path.join(self.cachePath, path)
+                with open(fullPath, "wb") as f:
+                    f.write(dataBytes)
+                with open(fullPath+".meta.json", "w") as f:
+                    f.write(json.dumps({"version":version, "expireAt":expireAt}))
+            else:
+                client = self._node.getClient()
+                CHUNK_SIZE = 1024*1024*15
+                def write_data():
+                    for j in range(0, len(dataBytes), CHUNK_SIZE):
+                        chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
+                        request = rpc_pb2.RpcCacheSetRequest(
+                            key=path, 
+                            data=chunk,
+                            expireAt=expireAt,
+                            version=version
+                        )
+                        yield request                              
+                res=await client.cacheSet(write_data())
+                return res.success
         except Exception as e:
             print("Error setting cache "+str(e))
             return False
         
 
-    async def cacheGet(self, path, lastVersion = 0):
+    async def cacheGet(self, path, lastVersion = 0, local=False):
         try:
-            client = self._node.getClient()
-            bytesOut = bytearray()
-            stream = client.cacheGet(rpc_pb2.RpcCacheGetRequest(key=path, lastVersion = lastVersion))
-            async for chunk in stream:
-                if not chunk.exists:
+            if local:
+                fullPath = os.path.join(self.cachePath, path)
+                if not os.path.exists(fullPath) or not os.path.exists(fullPath+".meta.json"):
                     return None
-                bytesOut.extend(chunk.data)
-            return pickle.loads(bytesOut)
+                with open(fullPath+".meta.json", "r") as f:
+                    meta = json.loads(f.read())
+                if lastVersion > 0 and meta["version"] != lastVersion:
+                    return None
+                if meta["expireAt"] > 0 and time.time()*1000 > meta["expireAt"]:
+                    return None
+                with open(fullPath, "rb") as f:
+                    return pickle.load(f)
+            else:
+                client = self._node.getClient()
+                bytesOut = bytearray()
+                stream = client.cacheGet(rpc_pb2.RpcCacheGetRequest(key=path, lastVersion = lastVersion))
+                async for chunk in stream:
+                    if not chunk.exists:
+                        return None
+                    bytesOut.extend(chunk.data)
+                return pickle.loads(bytesOut)
         except Exception as e:
             print("Error getting cache "+str(e))
             return None
@@ -223,10 +326,17 @@ class OpenAgentsNode:
                 except Exception as e:
                     print("Error closing channel "+str(e))
             print("Connect to "+self.poolAddress+":"+str(self.poolPort)+" with ssl "+str(self.poolSsl))
+            
+            options=[
+                # 20 MB
+                ('grpc.max_send_message_length', 1024*1024*20),
+                ('grpc.max_receive_message_length', 1024*1024*20)
+            ]
+
             if self.poolSsl:
-                self.channel = grpc.aio.secure_channel(self.poolAddress+":"+str(self.poolPort), grpc.ssl_channel_credentials())
+                self.channel = grpc.aio.secure_channel(self.poolAddress+":"+str(self.poolPort), grpc.ssl_channel_credentials(),options)
             else:
-                self.channel = grpc.aio.insecure_channel(self.poolAddress+":"+str(self.poolPort))
+                self.channel = grpc.aio.insecure_channel(self.poolAddress+":"+str(self.poolPort),options)
             self.rpcClient = rpc_pb2_grpc.PoolConnectorStub(self.channel)
         return self.rpcClient
 
