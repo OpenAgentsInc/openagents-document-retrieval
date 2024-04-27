@@ -27,7 +27,7 @@ class BlobStorage:
 
     async def writeBytes(self, path, dataBytes):
         client = self.node.getClient()
-        CHUNK_SIZE = 1024
+        CHUNK_SIZE = 1024*1024*100
         def write_data():
             for j in range(0, len(dataBytes), CHUNK_SIZE):
                 chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
@@ -90,7 +90,7 @@ class JobRunner:
         try:
             dataBytes = pickle.dumps(value)
             client = self._node.getClient()
-            CHUNK_SIZE = 1024
+            CHUNK_SIZE = 1024*1024*100
             def write_data():
                 for j in range(0, len(dataBytes), CHUNK_SIZE):
                     chunk = bytes(dataBytes[j:min(j+CHUNK_SIZE, len(dataBytes))])                   
@@ -260,7 +260,7 @@ class OpenAgentsNode:
                     filterByKind  = filter["filterByKind"] if "filterByKind" in filter else None,
                     wait=60000,
                     # exclude failed jobs
-                    excludeId = [x for x in self.failedJobsTracker if time.time()-x[1] < 60]
+                    excludeId = [x[0] for x in self.failedJobsTracker if time.time()-x[1] < 60]
                 ))).jobs)    
             
             for job in jobs:           
@@ -299,7 +299,8 @@ class OpenAgentsNode:
                     traceback.print_exc()
         except Exception as e:
             self.log("Error executing runner "+str(e), None)
-            await asyncio.sleep(100.0/1000.0)
+            traceback.print_exc()
+            await asyncio.sleep(5000.0/1000.0)
         self.runnerTasks[runner]=asyncio.create_task(self.executePendingJobForRunner(runner))
 
  
@@ -363,6 +364,7 @@ class OpenAgentsNode:
         asyncio.run(self.run(poolAddress, poolPort))
 
     async def run(self, poolAddress=None, poolPort=None, poolSsl=False):
+        await asyncio.sleep(5000.0/1000.0)
         self.poolAddress = poolAddress or os.getenv('POOL_ADDRESS', "127.0.0.1")
         self.poolPort = poolPort or int(os.getenv('POOL_PORT', "5000"))
         self.poolSsl = poolSsl or os.getenv('POOL_SSL', "false")== "true"
