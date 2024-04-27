@@ -115,7 +115,6 @@ class JobRunner:
             stream = client.cacheGet(rpc_pb2.RpcCacheGetRequest(key=path, lastVersion = lastVersion))
             async for chunk in stream:
                 if not chunk.exists:
-                    print("Cache miss")
                     return None
                 bytesOut.extend(chunk.data)
             return pickle.loads(bytesOut)
