@@ -547,7 +547,7 @@ class OpenObserveLogger:
                 batch.append(self.buffer.get())
          
             try:
-                url = self.options["baseUrl"]+"/api/"+self.options["org"]+"/"+"test"+"/_json"   
+                url = self.options["baseUrl"]+"/api/"+self.options["org"]+"/"+self.options["stream"]+"/_json"   
 
                 basicAuth = self.options["auth"]
                 if not isinstance(basicAuth, str):
