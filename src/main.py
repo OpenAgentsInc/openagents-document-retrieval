@@ -121,14 +121,10 @@ class Runner (JobRunner):
         await self.cacheSet(cacheId, output)
         await self.cacheSet(cacheId+".meta", {"nextUpdate":nextUpdate})
         return output
-    # async def test(self):
-    #     output,nextT = await self.fetch_content("https://bayanbox.ir/view/2284903837892390875/jMonkeyEngine-3.0-Beginner-s-Guide.pdf")
-    #     print(output)
-    #     print(nextT)
+
 
         
 runner  = Runner(filters=EventTemplate.filters,sockets=EventTemplate.sockets,meta=EventTemplate.meta,template=EventTemplate.template)
-# asyncio.run(runner.test())
 node = OpenAgentsNode(NodeConfig.meta)
 node.registerRunner(runner)
 node.start()
