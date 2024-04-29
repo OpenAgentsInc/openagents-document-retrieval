@@ -27,7 +27,7 @@ class Runner (JobRunner):
         self.loaders = []
 
         self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
-        maxWorkers = int(os.getenv('MAX_WORKERS', "32"))
+        maxWorkers = int(os.getenv('DOCUMENT_RETRIEVAL_MAX_WORKERS', "32"))
         os.makedirs(self.cachePath, exist_ok=True)
         self.executor = ThreadPoolExecutor(max_workers=maxWorkers)
 
