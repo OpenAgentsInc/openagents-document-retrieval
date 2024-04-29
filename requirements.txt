@@ -1,7 +1,7 @@
 markdownify
 beautifulsoup4
 PyPDF2
-grpcio==1.62.1
+grpcio==1.62.2
 protobuf==5.26.1
 lxml
 requests
