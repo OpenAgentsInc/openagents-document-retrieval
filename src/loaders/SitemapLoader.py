@@ -11,7 +11,6 @@ import traceback
 from dateutil import parser
 import os
 class SitemapLoader(HTMLLoader):
-    runner = None
     def __init__(self,runner):
         self.runner = runner
         self.maxWorkers = int(os.getenv('MAX_SIMULTANEOUS_REQUESTS', "4"))

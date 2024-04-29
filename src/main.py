@@ -18,13 +18,14 @@ from loaders.SitemapLoader import SitemapLoader
 
 
 class Runner (JobRunner):
-    executor=None
-    loaders = []
 
 
 
     def __init__(self, filters, meta, template, sockets):
         super().__init__(filters, meta, template, sockets)
+        self.executor=None
+        self.loaders = []
+
         self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
         maxWorkers = int(os.getenv('MAX_WORKERS', "32"))
         os.makedirs(self.cachePath, exist_ok=True)
