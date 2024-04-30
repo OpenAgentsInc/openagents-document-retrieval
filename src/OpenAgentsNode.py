@@ -300,6 +300,23 @@ class JobRunner:
     async def run(self, job):
         pass
 
+ 
+class HeaderAdderInterceptor(grpc.aio.UnaryUnaryClientInterceptor):
+    def __init__(self, headers):
+        self._headers = headers
+
+    async def intercept_unary_unary(self, continuation, client_call_details, request):
+        metadata = client_call_details.metadata
+        if not metadata:
+            metadata=grpc.aio.Metadata()
+        for header in self._headers:
+            metadata.add(header[0], header[1])
+
+        new_client_call_details = client_call_details._replace(metadata=metadata)
+        response = await continuation(new_client_call_details, request)
+
+        return response
+
 class OpenAgentsNode:
   
     def __init__(self, nameOrMeta=None, icon=None, description=None):
@@ -361,11 +378,25 @@ class OpenAgentsNode:
                 ('grpc.max_receive_message_length', 1024*1024*20)
             ]
 
+            interceptors=None
+            nodeToken = os.getenv('NODE_TOKEN', None)
+            if nodeToken:
+                metadata=[
+                    ("authorization", str(nodeToken))
+                ]
+                if interceptors is None: interceptors=[]
+                interceptor=HeaderAdderInterceptor(metadata)        
+                interceptors.append(interceptor)
+                
+
             if self.poolSsl:
-                self.channel = grpc.aio.secure_channel(self.poolAddress+":"+str(self.poolPort), grpc.ssl_channel_credentials(),options)
+                self.channel = grpc.aio.secure_channel(self.poolAddress+":"+str(self.poolPort), grpc.ssl_channel_credentials(),options,interceptors=interceptors)
             else:
-                self.channel = grpc.aio.insecure_channel(self.poolAddress+":"+str(self.poolPort),options)
+                self.channel = grpc.aio.insecure_channel(self.poolAddress+":"+str(self.poolPort),options,interceptors=interceptors)
+            
             self.rpcClient = rpc_pb2_grpc.PoolConnectorStub(self.channel)
+            
+
         return self.rpcClient
 
     async def _logToJob(self, message, jobId=None):
