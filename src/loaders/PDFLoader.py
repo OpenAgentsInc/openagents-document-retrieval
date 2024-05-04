@@ -8,7 +8,7 @@ from loaders.Utils import Utils
 
 class PDFLoader(Loader):
     def __init__(self,runner):
-        pass
+        super().__init__(runner)
 
     
 

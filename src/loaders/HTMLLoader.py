@@ -5,7 +5,7 @@ from loaders.Utils import Utils
 import time
 class HTMLLoader(Loader):
     def __init__(self,runner):
-        pass
+        super().__init__(runner)
     
     def load(self,url):
         content = Utils.fetch(url,["text/html","application/xhtml+xml","application/xhtml","application/xhtml+xml","text/plain"])

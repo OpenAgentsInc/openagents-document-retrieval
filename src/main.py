@@ -1,8 +1,5 @@
-from OpenAgentsNode import OpenAgentsNode
-from OpenAgentsNode import JobRunner
+from openagents import JobRunner,OpenAgentsNode,NodeConfig,RunnerConfig
 
-import config as NodeConfig
-from events import retrieve as EventTemplate
 import json
 import hashlib
 import os
@@ -17,24 +14,76 @@ from loaders.HTMLLoader import HTMLLoader
 from loaders.SitemapLoader import SitemapLoader
 
 
-class Runner (JobRunner):
+class DocumentRetrieval (JobRunner):
+
+    def __init__(self):
+        # Runner metadata configuration
+        super().__init__(\
+            RunnerConfig()\
+                .kind(5003)\
+                .name("PDF/HTML/Plaintext URLs to Markdown")\
+                .description("This action fetches content from HTML, PDF, and plaintext URLs and returns the content in markdown format.")\
+                .tos("https://openagents.com/terms") \
+                .privacy("https://openagents.com/privacy")\
+                .author("OpenAgentsInc")\
+                .website("https://github.com/OpenAgentsInc/openagents-document-retrieval")\
+                .picture("")\
+                .tags([
+                    "tool", 
+                    "retrieval-pdf",
+                    "retrieval-html", 
+                    "retrieval-plaintext",
+                    "retrieval-website"
+                ]) \
+                .filters()\
+                    .filterByRunOn("openagents\\/document-retrieval") \
+                    .commit()\
+                .template("""{
+                    "kind": {{meta.kind}},
+                    "created_at": {{sys.timestamp_seconds}},
+                    "tags": [
+                        ["param","run-on", "openagents/document-retrieval"],
+                        ["output", "{{in.outputType}}"],
+                        {{#in.urls}}
+                        ["i", "{{.}}", "text", "",  ""],
+                        {{/in.urls}}     
+                        ["expiration", "{{sys.expiration_timestamp_seconds}}"],
+                    ],
+                    "content":""
+                }
+                """)\
+                .inSocket("urls", "array")\
+                    .description("Direct URLs to PDF, HTML, or plaintext content")\
+                    .schema()\
+                        .field("url", "string")\
+                            .description("The URL to fetch content from")\
+                            .commit()\
+                    .commit()\
+                .commit()\
+                .inSocket("outputType", "string")\
+                    .description("The Desired Output Type")\
+                    .defaultValue("application/json")\
+                .commit()\
+                .outSocket("output", "string")\
+                    .description("The fetched content in markdown format or an hyperdrive bundle url")\
+                    .name("Output")
+                .commit()\
+            .commit()\
+        )
+        ########
 
 
+        maxWorkers = int(os.getenv('DOCUMENT_RETRIEVAL_MAX_WORKERS', "32"))
 
-    def __init__(self, filters, meta, template, sockets):
-        super().__init__(filters, meta, template, sockets)
         self.executor=None
         self.loaders = []
-
-        self.cachePath = os.getenv('CACHE_PATH', os.path.join(os.path.dirname(__file__), "cache"))
-        maxWorkers = int(os.getenv('DOCUMENT_RETRIEVAL_MAX_WORKERS', "32"))
-        os.makedirs(self.cachePath, exist_ok=True)
         self.executor = ThreadPoolExecutor(max_workers=maxWorkers)
 
         # Register all loaders
         self.registerLoader(SitemapLoader(self))
         self.registerLoader(PDFLoader(self))
         self.registerLoader(HTMLLoader(self))
+
 
     def registerLoader(self, loader):
         self.loaders.append(loader)
@@ -45,19 +94,19 @@ class Runner (JobRunner):
             output = None
             nextUpdate = int(time.time()*1000 + 30*24*60*60*1000)
             for loader in self.loaders:
-                print("Loader found",loader)
+                self.getLogger().finer("Loader found",loader)
                 try:
                     output,nextT =  loader.load(url)
                     if not output:
                         continue
                 except Exception as e:
-                    print(e)
+                    self.getLogger().error(e)
                     continue
                 if nextT < nextUpdate:  nextUpdate = nextT
                 break
             return output,nextUpdate
         except Exception as e:
-            print(e)
+            self.getLogger().error(e)
             return ""
         
 
@@ -84,10 +133,10 @@ class Runner (JobRunner):
         meta = await self.cacheGet(cacheId+".meta") if not ignoreCache else None
         try:
             if output and meta and (meta["nextUpdate"] > int(time.time()*1000) or meta["nextUpdate"] < 0):
-                print("Cache hit")
+                self.getLogger().finest("Cache hit")
                 return output
         except Exception as e:
-            print(e)
+            self.getLogger().error("Error: Can't fetch "+jin.data+" "+str(e))
             
             
         outputContent = []
@@ -102,8 +151,8 @@ class Runner (JobRunner):
                 else:
                     outputContent.append(content)                
             except Exception as e:
-                print(e)
-                self.log("Error: Can't fetch "+jin.data+" "+str(e))
+                
+                self.getLogger().error("Error: Can't fetch "+jin.data+" "+str(e))
         
         if nextUpdate < cacheExpirationHint or cacheExpirationHint < 0:
             nextUpdate = cacheExpirationHint
@@ -124,8 +173,11 @@ class Runner (JobRunner):
         return output
 
 
+
         
-runner  = Runner(filters=EventTemplate.filters,sockets=EventTemplate.sockets,meta=EventTemplate.meta,template=EventTemplate.template)
-node = OpenAgentsNode(NodeConfig.meta)
-node.registerRunner(runner)
+node = OpenAgentsNode(NodeConfig().name("DocumentRetrieval").version("0.0.1").description("Document retrieval node").getMeta())
+node.registerRunner(DocumentRetrieval())
 node.start()
+
+
+

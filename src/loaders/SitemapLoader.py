@@ -12,7 +12,7 @@ from dateutil import parser
 import os
 class SitemapLoader(HTMLLoader):
     def __init__(self,runner):
-        self.runner = runner
+        super().__init__(runner)
         self.maxWorkers = int(os.getenv('MAX_SIMULTANEOUS_REQUESTS', "4"))
 
         
@@ -23,15 +23,16 @@ class SitemapLoader(HTMLLoader):
 
         if sitemap == "":
             try:
-                print("Try sitemap.xml")    
+                self.getLogger().finer("Try sitemap.xml")    
                 sitemap=  (url+"/" if url[-1]!="/" else url) + "sitemap.xml"
                 if not Utils.existsUrl(sitemap): sitemap=""
             except Exception as e:
+                self.getLogger().error("Error fetching sitemap.xml",e)
                 traceback.print_exc()                
 
         if sitemap == "":
             try:
-                print("Try from robots.txt")
+                self.getLogger.finer("Try from robots.txt")
                 robots =  Utils.fetch((url+"/" if url[-1]!="/" else url) + "robots.txt")
                 for line in robots.split("\n"):
                     try:
@@ -42,13 +43,15 @@ class SitemapLoader(HTMLLoader):
                                 sitemap = (url + "/" if url[-1]!="/" else url) + sitemap
                             break
                     except Exception as e:
+                        self.getLogger().error("Error parsing robots.txt",e)
                         traceback.print_exc()                
             except Exception as e:
+                self.getLogger().error("Error fetching robots.txt",e)
                 traceback.print_exc()                
 
         if sitemap=="":
             try:          
-                print("Try from html")
+                self.getLogger().finer("Try from html")
                 html = Utils.fetch(url,[ "text/html","application/xhtml+xml","application/xhtml","application/xhtml+xml","text/plain" ])
                 if html:
                     soup = BeautifulSoup(html, features="html.parser")
@@ -59,10 +62,11 @@ class SitemapLoader(HTMLLoader):
                         if sitemap.startswith("/"):
                             sitemap = (url + "/" if url[-1]!="/" else url) + sitemap
             except Exception as e:
+                self.getLogger().error("Error fetching html",e)
                 traceback.print_exc()                
 
         if sitemap:
-            print("Found sitemap at",sitemap)
+            self.getLogger().finer("Found sitemap at",sitemap)
             return sitemap
         else:
             return None
@@ -84,7 +88,7 @@ class SitemapLoader(HTMLLoader):
                 loc = sitemapTag.find("loc")
                 if loc:
                     url = loc.text
-                    print("Found sub sitemap",url)
+                    self.getLogger().finer("Found sub sitemap",url)
                     sitemapXml = Utils.fetch(url)
                     [_,nextSubSitemapUpdate] = self.extractUrls(sitemapXml, out)
                     if nextSubSitemapUpdate < nextSitemapUpdate:
@@ -100,7 +104,8 @@ class SitemapLoader(HTMLLoader):
                 loc = urlTag.find("loc")
                 lastmod = urlTag.find("lastmod")
                 changefreq = urlTag.find("changefreq")
-                print("Found url",loc.text)
+                self.getLogger().finer("Found url",loc.text)
+
                 loc = loc.text if loc else None
                 if loc is None: continue
 
@@ -135,7 +140,8 @@ class SitemapLoader(HTMLLoader):
                 })
 
             except Exception as e:
-                traceback.print_exc()                
+                traceback.print_exc()             
+                self.getLogger().error("Error parsing sitemap",e)   
 
             
         return out,nextSitemapUpdate
@@ -175,14 +181,15 @@ class SitemapLoader(HTMLLoader):
         for url in urls:
             def run(url,out):
                 try:
-                    print("Fetching",url["loc"])
+                    self.getLogger().fine("Fetching",url["loc"])
                     content = Utils.fetch(url["loc"],["text/html","application/xhtml+xml","application/xhtml","application/xhtml+xml","text/plain"])
                     if not content:
-                        print("Can't fetch",url["loc"],"wrong mime type")
+                        self.getLogger().finer("Can't fetch",url["loc"],"wrong mime type")
                         return
                     contents = loadHtml(url["loc"])[0]                    
                     out.extend(contents)
                 except Exception as e:
+                    self.getLogger().error("Error fetching",url["loc"],e)
                     traceback.print_exc()                
             executor.submit(run,url,contents)
         executor.shutdown(wait=True)
