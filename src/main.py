@@ -155,7 +155,7 @@ class DocumentRetrieval (JobRunner):
                 logger.finest("Cache hit")
                 return output
         except Exception as e:
-            logger.error("Error: Can't fetch "+jin.data+" "+str(e))
+            logger.error("Error: Can't fetch  "+str(e))
             
             
         outputContent = []
