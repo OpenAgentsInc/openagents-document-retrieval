@@ -15,11 +15,13 @@ class PDFLoader(Loader):
     def load(self,url):
         content = Utils.fetch(url,["application/pdf"], True)
         if not content:return [None,None]
+        self.getLogger().info("Use PDF Loader...")
 
         # Open the PDF file in read binary mode
         f = BytesIO(content)
         pdf_reader = PyPDF2.PdfReader(f)
         num_pages = len(pdf_reader.pages)
+        self.getLogger().info("Load "+str(num_pages)+" pages from PDF...")
         # Iterate through all pages and extract text
         fullText = ""
         for page_num in range(num_pages):
