@@ -22,7 +22,6 @@ class Utils:
                 if mimetype:
                     mimetype = mimetype.split(";")[0]
                 if not mimetype in expectedMimes:
-                    print("Mime type not expected",mimetype)
                     conn.close()
                     return None
             content = conn.read()
