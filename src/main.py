@@ -39,15 +39,15 @@ class DocumentRetrieval (JobRunner):
                 },
                 filter={"filterByRunOn": "openagents\\/document-retrieval"},
                 template="""{
-                    "kind": {{meta.kind}},
-                    "created_at": {{sys.timestamp_seconds}},
+                    "kind": {{{meta.kind}}},
+                    "created_at": {{{sys.timestamp_seconds}}},
                     "tags": [
                         ["param","run-on", "openagents/document-retrieval"],
-                        ["output", "{{in.outputType}}"],
+                        ["output", "{{{in.outputType}}}"],
                         {{#in.urls}}
-                        ["i", "{{.}}", "text", "",  ""],
+                        ["i", "{{url}}", "text", "",  ""],
                         {{/in.urls}}     
-                        ["expiration", "{{sys.expiration_timestamp_seconds}}"],
+                        ["expiration", "{{{sys.expiration_timestamp_seconds}}}"]
                     ],
                     "content":""
                 }
