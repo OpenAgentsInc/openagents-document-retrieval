@@ -3,5 +3,5 @@ beautifulsoup4
 PyPDF2
 lxml
 requests
-openagents-node-sdk==0.3.1
+openagents-node-sdk==0.3.2
 python-dateutil
