@@ -8,7 +8,7 @@ class HTMLLoader(Loader):
         super().__init__(runner)
     
     def load(self,url):
-        content = Utils.fetch(url,["text/html","application/xhtml+xml","application/xhtml","application/xhtml+xml","text/plain"])
+        content = Utils.fetch(url,["text/html","application/xhtml+xml","application/xhtml","application/xhtml+xml"])
         if not content:
             return [None,None]
         soup = BeautifulSoup(content, features="html.parser")  

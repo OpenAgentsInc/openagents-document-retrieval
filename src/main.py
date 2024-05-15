@@ -12,6 +12,7 @@ import asyncio
 from loaders.PDFLoader import PDFLoader
 from loaders.HTMLLoader import HTMLLoader
 from loaders.SitemapLoader import SitemapLoader
+from loaders.TxtLoader import TxtLoader
 
 
 class DocumentRetrieval (JobRunner):
@@ -98,6 +99,7 @@ class DocumentRetrieval (JobRunner):
         self.registerLoader(SitemapLoader(self))
         self.registerLoader(PDFLoader(self))
         self.registerLoader(HTMLLoader(self))
+        self.registerLoader(TxtLoader(self))
         self.setRunInParallel(True)
 
 
