@@ -6,7 +6,7 @@ class TxtLoader(Loader):
         super().__init__(runner)
     
     def load(self,url):
-        content = Utils.fetch(url,["text/plain"])
+        content = Utils.fetch(url,["text/plain","text/markdown","text/x-markdown"])
         if not content:
             return [None,None]
         content+="\nSource: "+url+'\n\n'
