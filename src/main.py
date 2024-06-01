@@ -48,7 +48,8 @@ class DocumentRetrieval (JobRunner):
                         {{#in.urls}}
                         ["i", "{{url}}", "text", "",  ""],
                         {{/in.urls}}     
-                        ["expiration", "{{{sys.expiration_timestamp_seconds}}}"]
+                        ["expiration", "{{{sys.expiration_timestamp_seconds}}}"],
+                        ["bid", "{{sys.bidAmount}}", "{{sys.bidCurrency}}", "{{sys.bidProtocol}}"]
                     ],
                     "content":""
                 }
