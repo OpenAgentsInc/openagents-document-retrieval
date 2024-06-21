@@ -1,5 +1,7 @@
 from urllib.request import Request, urlopen
 import traceback
+from urllib.parse import quote
+
 class Utils:
     @staticmethod
     def existsUrl(url):
@@ -14,6 +16,7 @@ class Utils:
     @staticmethod
     def fetch(url, expectedMimes = None, binary=False):
         try:
+            url = quote(url, safe=':/')
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'}
             req = Request(url, headers=headers)
             conn = urlopen(req)
